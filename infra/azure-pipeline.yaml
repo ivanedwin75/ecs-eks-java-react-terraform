@@ -1,0 +1,137 @@
+trigger:
+  - main
+  - develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: GeneralVars
+  - group: WorkspaceWebhook
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/Terraform/templates'
+
+stages:
+  - stage: Develop
+    variables:
+      - group: AwsTokenDevelop
+    displayName: 'CI/CD to development environment'
+    jobs:
+      - job: DevelopCI
+        displayName: 'Planing Infrastructure'
+        timeoutInMinutes: 5
+        condition: |
+          eq(variables['build.sourceBranch'], 'refs/heads/develop')
+        steps:
+          - template: azure-pipelines/templates/ci.yaml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: waitForValidation
+        displayName: 'Wait for external validation'
+        dependsOn: DevelopCI
+        pool: server
+        timeoutInMinutes: 4320 # job times out in 3 days
+        steps:
+        - task: ManualValidation@0
+          timeoutInMinutes: 1440 # task times out in 1 day
+          inputs:
+            notifyUsers: |
+              $(NOTIFY_USER)
+            instructions: 'Please validate the Terraform Plan and resume'
+            onTimeout: 'resume'
+
+      - job: DevelopCD
+        displayName: 'Apply Infrastructure'
+        dependsOn: waitForValidation
+        timeoutInMinutes: 5
+        condition: |
+          and (
+          succeeded(),
+          eq(variables['build.sourceBranch'], 'refs/heads/develop')
+          )
+        steps:
+          - template: azure-pipelines/templates/cd.yaml
+          - template: azure-pipelines/templates/notify.yml
+
+  - stage: QA
+    variables:
+      - group: AwsTokenQA
+    displayName: 'CI/CD to quality-assurance environment'
+    jobs:
+      - job: QACI
+        displayName: 'Planing Infrastructure'
+        timeoutInMinutes: 5
+        condition: |
+          eq(variables['build.sourceBranch'], 'refs/heads/release')
+        steps:
+          - template: azure-pipelines/templates/ci.yaml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: waitForValidation
+        displayName: 'Wait for external validation'
+        dependsOn: QACI
+        pool: server
+        timeoutInMinutes: 4320 # job times out in 3 days
+        steps:
+        - task: ManualValidation@0
+          timeoutInMinutes: 1440 # task times out in 1 day
+          inputs:
+            notifyUsers: |
+              $(NOTIFY_USER)
+            instructions: 'Please validate the Terraform Plan and resume'
+            onTimeout: 'resume'
+
+      - job: QACD
+        displayName: 'Apply Infrastructure'
+        dependsOn: waitForValidation
+        timeoutInMinutes: 5
+        condition: |
+          and (
+          succeeded(),
+          eq(variables['build.sourceBranch'], 'refs/heads/release')
+          )
+        steps:
+          - template: azure-pipelines/templates/cd.yaml
+          - template: azure-pipelines/templates/notify.yml
+
+  - stage: Production
+    variables:
+      - group: AwsTokenProd
+    dependsOn: QA
+    displayName: 'CI/CD to production environment'
+    jobs:
+      - job: ProductionCI
+        displayName: 'Planing Infrastructure'
+        timeoutInMinutes: 5
+        condition: |
+          eq(variables['build.sourceBranch'], 'refs/heads/main')
+        steps:
+          - template: azure-pipelines/templates/ci.yaml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: waitForValidation
+        displayName: 'Wait for external validation'
+        dependsOn: ProductionCI
+        pool: server
+        timeoutInMinutes: 4320 # job times out in 3 days
+        steps:
+        - task: ManualValidation@0
+          timeoutInMinutes: 1440 # task times out in 1 day
+          inputs:
+            notifyUsers: |
+              $(NOTIFY_USER)
+            instructions: 'Please validate the Terraform Plan and resume'
+            onTimeout: 'resume'
+
+      - job: ProductionCD
+        displayName: 'Apply Infrastructure'
+        dependsOn: waitForValidation
+        timeoutInMinutes: 5
+        condition: |
+          and (
+          succeeded(),
+          eq(variables['build.sourceBranch'], 'refs/heads/main')
+          )
+        steps:
+          - template: azure-pipelines/templates/cd.yaml
+          - template: azure-pipelines/templates/notify.yml

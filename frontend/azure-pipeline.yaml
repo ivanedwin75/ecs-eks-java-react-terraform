@@ -1,0 +1,131 @@
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - release*
+  tags:
+    include:
+      - 'v*'
+      - 'pre-v*'
+
+  paths:
+    exclude:
+      - azure-pipelines/
+      - azure-pipelines.yml
+
+pool:
+  name: Azure Pipelines
+  vmImage: ubuntu-latest
+
+variables:
+  - group: WorkspaceWebhook
+  - name: npm_config_cache
+    value: $(Pipeline.Workspace)/.npm
+  - name: ArtifactName
+    value: '$(Build.Repository.Name)_$(Build.BuildNumber)'
+
+stages:
+  - stage: Develop
+    displayName: 'CI/CD to development environment'
+    variables:
+      - group: AWSFrontVarsDev
+    jobs:
+      - job: DevelopCI
+        displayName: 'Develop CI'
+        condition: |
+          and
+          (
+          always(),
+          eq(variables['build.sourceBranch'], 'refs/heads/develop'),
+          not(startsWith(variables['Build.SourceVersionMessage'], 'rollback:'))
+          )
+        steps:
+          - template: azure-pipelines/templates/ci.yml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: DevelopCD
+        displayName: 'Develop CD'
+        dependsOn: DevelopCI
+        condition: |
+          and
+          (
+          succeeded(),
+          eq(variables['build.sourceBranch'], 'refs/heads/develop'),
+          not(startsWith(variables['Build.SourceVersionMessage'], 'rollback:'))
+          )
+        steps:
+          - template: azure-pipelines/templates/cd.yml
+          - template: azure-pipelines/templates/notify.yml
+
+  - stage: QualityAssurance
+    displayName: 'CI/CD to development environment'
+    variables:
+      - group: AWSFrontVarsQA
+    jobs:
+      - job: QualityAssuranceCI
+        displayName: 'QualityAssurance CI'
+        condition: |
+          and
+          (
+          always(),
+          contains(variables['build.sourceBranch'], 'refs/heads/release'),
+          not(startsWith(variables['Build.SourceVersionMessage'], 'rollback:'))
+          )
+        steps:
+          - template: azure-pipelines/templates/ci.yml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: QualityAssuranceCD
+        displayName: 'QualityAssurance CD'
+        dependsOn: QualityAssuranceCI
+        condition: |
+          and
+          (
+          succeeded(),
+          contains(variables['build.sourceBranch'], 'refs/heads/release'),
+          not(startsWith(variables['Build.SourceVersionMessage'], 'rollback:'))
+          )
+        steps:
+          - template: azure-pipelines/templates/cd.yml
+          - template: azure-pipelines/templates/notify.yml
+
+  - stage: Production
+    displayName: 'CI/CD to Production environment'
+    variables:
+      - group: AWSFrontVarsProd
+    jobs:
+      - job: ProductionCI
+        displayName: 'Production CI'
+        condition: |
+          and
+          (
+          always(),
+          contains(variables['build.sourceBranch'], 'refs/heads/main'),
+          not(startsWith(variables['Build.SourceVersionMessage'], 'rollback:'))
+          )
+        steps:
+          - template: azure-pipelines/templates/ci.yml
+          - template: azure-pipelines/templates/notify.yml
+
+      - job: waitForValidation
+        displayName: 'Wait for external validation'
+        dependsOn: ProductionCI
+        pool: server
+        timeoutInMinutes: '4320' # job times out in 3 days
+        steps:
+        - task: ManualValidation@0
+          timeoutInMinutes: 1440 # task times out in 1 day
+          inputs:
+            notifyUsers: |
+              $(NOTIFY_USER)
+            instructions: 'Please validate production deployment'
+            onTimeout: 'reject'
+
+      - job: ProductionCD
+        displayName: 'Production CD'
+        dependsOn: waitForValidation
+        condition: succeeded()
+        steps:
+          - template: azure-pipelines/templates/cd.yml
+          - template: azure-pipelines/templates/notify.yml

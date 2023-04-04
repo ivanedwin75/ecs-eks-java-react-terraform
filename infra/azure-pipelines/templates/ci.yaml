@@ -1,0 +1,55 @@
+steps:
+  - bash: |
+      mkdir ~/.aws
+      cat >> ~/.aws/credentials << EOL
+      [default]
+      aws_access_key_id=$(AWS_ACCESSKEY)
+      aws_secret_access_key=$(AWS_SK)
+      EOL
+    displayName: 'Set AWS credentials'
+
+  - task: TerraformInstaller@0
+    displayName: install terraform
+    inputs:
+      terraformVersion: latest
+
+  - task: TerraformCLI@0
+    displayName: 'Terraform Init'
+    env:
+      TF_VAR_access_key: $(AWS_ACCESSKEY)
+      TF_VAR_secret_key: $(AWS_SK)
+      TF_VAR_scope_name: $(SCOPE_NAME)
+      TF_VAR_scope_secret: $(SCOPE_SECRET)
+      TF_VAR_provider_client_id: $(PROVIDER_CLIENT_ID)
+      TF_VAR_provider_client_secret: $(PROVIDER_CLIENT_SECRET)
+    inputs:
+      command: init
+      commandOptions: '--backend-config="../variables/$(ENV)/backend-$(ENV).tfvars" --backend-config="profile=default"'
+      workingDirectory: $(workingDirectory)
+
+  - task: TerraformCLI@0
+    displayName: Terraform Validate
+    env:
+      TF_VAR_access_key: $(AWS_ACCESSKEY)
+      TF_VAR_secret_key: $(AWS_SK)
+      TF_VAR_scope_name: $(SCOPE_NAME)
+      TF_VAR_scope_secret: $(SCOPE_SECRET)
+      TF_VAR_provider_client_id: $(PROVIDER_CLIENT_ID)
+      TF_VAR_provider_client_secret: $(PROVIDER_CLIENT_SECRET)
+    inputs:
+      command: 'validate'
+      workingDirectory: $(workingDirectory)
+
+  - task: TerraformCLI@0
+    displayName: Terraform Plan
+    env:
+      TF_VAR_access_key: $(AWS_ACCESSKEY)
+      TF_VAR_secret_key: $(AWS_SK)
+      TF_VAR_scope_name: $(SCOPE_NAME)
+      TF_VAR_scope_secret: $(SCOPE_SECRET)
+      TF_VAR_provider_client_id: $(PROVIDER_CLIENT_ID)
+      TF_VAR_provider_client_secret: $(PROVIDER_CLIENT_SECRET)
+    inputs:
+      command: 'plan'
+      commandOptions: '--var-file="../variables/$(ENV)/terraform-$(ENV).tfvars"'
+      workingDirectory: $(workingDirectory)

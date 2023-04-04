@@ -1,0 +1,130 @@
+steps:
+  # Get Hash or Tag version using git command provide from ubuntu
+  - bash: |
+      echo "##vso[task.setvariable variable=hashOrTag]$(git describe --tags 2> /dev/null || git rev-parse --short HEAD)"
+    displayName: 'Set hashOrTag'
+
+  - script: |
+      sudo apt install -y google-chrome-stable
+    displayName: 'Install Chrome'
+
+  - script: |
+      sudo apt install -y firefox
+    displayName: 'Install Firefox'
+
+  - bash: |
+      mkdir ~/.aws
+      cat >> ~/.aws/credentials << EOL
+      [default]
+      aws_access_key_id=$(AWS_ACCESS_KEY_ID)
+      aws_secret_access_key=$(AWS_SECRET_ACCESS_KEY)
+      EOL
+      cat >> ~/.aws/config << EOL
+      [profile default]
+      region=$(REGION)
+      output=json
+      EOL
+    displayName: 'Set AWS credentials'
+
+  - task: Npm@1
+    displayName: 'NPM Install Dependencies'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: 'install -g @aws-amplify/cli'
+
+  - script: |
+      sh $(System.DefaultWorkingDirectory)/azure-pipelines/scripts/amplify-pull.sh
+    displayName: 'Pull amplify configuration'
+    env:
+      SRC_PROJECT: $(System.DefaultWorkingDirectory)/src
+      FRAMEWORK: $(FRAMEWORK)
+      USER_POOL_ID: $(USER_POOL_ID)
+      WEB_CLIENT_ID: $(WEB_CLIENT_ID)
+      NATIVE_CLIENTE_ID: $(NATIVE_CLIENTE_ID)
+      PROFILE: default
+      REGION: $(REGION)
+      PROJECTNAME: $(PROJECTNAME)
+      APP_ID: $(APP_ID)
+      ENV: $(ENV)
+
+  - task: NodeTool@0
+    displayName: 'Use Node 16.16.x'
+    inputs:
+      versionSpec: 16.16.x
+
+  - task: Cache@2
+    displayName: Cache npm
+    inputs:
+      key: 'npm | "$(Agent.OS)" | package.json'
+      restoreKeys: |
+        npm | "$(Agent.OS)"
+      path: $(npm_config_cache)
+
+  - task: Npm@1
+    displayName: 'NPM Install Dependencies'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: 'install --cache $(npm_config_cache)'
+
+  - task: SonarCloudPrepare@1
+    displayName: 'Prepare analysis on SonarCloud'
+    inputs:
+      SonarCloud: 'SonarCloudGrowingMap'
+      organization: talentpool-1
+      scannerMode: CLI
+      configMode: manual
+      cliProjectKey: pragma-growthmap-web
+      cliProjectName: pragma-growthmap-web
+      cliSources: src
+      extraProperties: |
+        # Additional properties that will be passed to the scanner,
+        # Put one key=value per line, example:
+        sonar.exclusions=**/*.spec.js,**/*.json
+        sonar.typescript.lcov.reportPaths=./coverage/pragma-growthmap-web/lcov.info
+
+  - task: Npm@1
+    displayName: 'npm test'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: 'run test:ci'
+    continueOnError: true
+
+  - task: PublishCodeCoverageResults@1
+    displayName: 'Publish code coverage results'
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/**/*.xml'
+
+  - task: SonarCloudAnalyze@1
+    displayName: 'Run Code Analysis'
+
+  - task: Npm@1
+    displayName: 'npm build project'
+    inputs:
+      command: custom
+      verbose: false
+      customCommand: 'run build-$(ENV)'
+
+  - task: SonarCloudPublish@1
+    inputs:
+      pollingTimeoutSec: '300'
+
+  - task: whitesource.whiteSource-bolt-v2.bolt.wss.WhiteSource@21
+    displayName: WhiteSource
+
+  - task: ArchiveFiles@2
+    displayName: 'Archive files'
+    inputs:
+      rootFolderOrFile: '$(System.DefaultWorkingDirectory)/dist/'
+      includeRootFolder: false
+      replaceExistingArchive: true
+      archiveFile: '$(Build.ArtifactStagingDirectory)/$(hashOrTag).zip'
+
+  - task: publishBuildArtifacts@1
+    displayName: 'Publish Artifacts'
+    inputs:
+      artifactName: '$(ArtifactName)'
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'

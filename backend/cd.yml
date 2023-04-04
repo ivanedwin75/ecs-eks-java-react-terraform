@@ -1,0 +1,68 @@
+steps:
+  # Get Hash or Tag version using git command provide from ubuntu
+  - bash: echo "##vso[task.setvariable variable=hashOrTag;isOutput=true]$(git rev-parse --short HEAD)"
+    workingDirectory: $(Build.Repository.Name)
+    name: setAppVersion
+
+  - bash: |
+      mkdir ~/.aws
+      cat >> ~/.aws/credentials << EOL
+      [default]
+      aws_access_key_id=$(AWS_ACCESSKEY)
+      aws_secret_access_key=$(AWS_SK)
+      EOL
+    displayName: 'Set AWS credentials'
+  
+  - bash: echo "##vso[task.setvariable variable=hash;isOutput=true]$(aws ecs list-services --cluster Cluster_mapa-de-crecimiento --region us-east-1 --output text| grep map-$(SVC_NAME)-svc | sed "s/.*map-$(SVC_NAME)-svc-//")"
+    name: oldServiceName
+
+  - bash: |
+      aws ecr get-login-password --region $(REGION_NAME) | \
+      docker login \
+      --username AWS \
+      --password-stdin $(FULL_ECR_REPO)
+    displayName: 'AWS CLI: Generate Docker config'
+
+  - bash: |
+      docker build --tag $(ECR_REPO) --build-arg PROFILE=$(PROFILE) -f Dockerfile .
+    workingDirectory: $(Build.Repository.Name)
+    displayName: 'Docker CLI: Building Docker image'
+
+  - bash: |
+      docker tag $(ECR_REPO):latest $(FULL_ECR_REPO)/$(ECR_REPO):$(SVC_NAME)-$(setAppVersion.hashOrTag)
+      docker push $(FULL_ECR_REPO)/$(ECR_REPO):$(SVC_NAME)-$(setAppVersion.hashOrTag)
+    displayName: 'Docker CLI: Pushing Docker image'
+
+  - bash: |
+      IMAGES_TO_DELETE=$(aws ecr list-images --region $(REGION_NAME) --repository-name $(ECR_REPO) --filter "tagStatus=UNTAGGED" --query 'imageIds[*]' --output json)
+      aws ecr batch-delete-image --region $(REGION_NAME) --repository-name $(ECR_REPO) --image-ids "$IMAGES_TO_DELETE" || true
+    displayName: 'AWS CLI: Delete untagged images from AWS ECR Container Registry'
+
+  - bash: |
+      sh $(System.DefaultWorkingDirectory)/pragma-groupmap-devsecops/scripts/generate-task-definition.sh \
+            "Mapa-de-crecimiento-$(SVC_NAME)" \
+            $(SVC_PORT) \
+            "$(SVC_NAME)-$(setAppVersion.hashOrTag)" \
+            "mapa-de-crecimiento-Development-logs" \
+            "map-$(SVC_NAME)-api" \
+            "$(SVC_NAME)"
+    displayName : 'Generate Task Definition'
+
+  - bash: |
+      aws ecs register-task-definition --cli-input-json file://task-definition.json --region us-east-1
+    displayName : 'Register Task Definition'
+
+  - bash: |
+      sh $(System.DefaultWorkingDirectory)/pragma-groupmap-devsecops/scripts/generate-ECS-svc.sh "map-$(SVC_NAME)-svc-$(setAppVersion.hashOrTag)" "Mapa-de-crecimiento-$(SVC_NAME)" $(SVC_TARGET) "map-$(SVC_NAME)-api" $(SVC_PORT)
+    displayName: 'Generate ecs-service file'
+
+  - bash: |
+      echo map-$(SVC_NAME)-svc-$(oldServiceName.hash)  && \
+      aws ecs update-service --cluster Cluster_mapa-de-crecimiento --region us-east-1 --service map-$(SVC_NAME)-svc-$(oldServiceName.hash) --desired-count 0 && \
+      aws ecs delete-service --cluster Cluster_mapa-de-crecimiento --region us-east-1 --service map-$(SVC_NAME)-svc-$(oldServiceName.hash)
+    displayName: 'Delete Old ecs-service file'
+    continueOnError: true
+
+  - bash: |
+      aws ecs create-service --cli-input-json file://ecs-service.json --region us-east-1
+    displayName : 'Create service'

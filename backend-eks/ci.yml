@@ -1,0 +1,49 @@
+steps:
+  - bash: |
+      echo "CI implementation"
+    displayName: "CI"
+
+#  - task: Gradle@2
+#    displayName: 'gradlew build'
+#    inputs:
+#      workingDirectory: ''
+#      gradleWrapperFile: 'gradlew'
+#      gradleOptions: '-Xmx3072m'
+#      javaHomeOption: 'JDKVersion'
+#      jdkVersionOption: '1.11'
+#      jdkArchitectureOption: 'x64'
+#      publishJUnitResults: false
+#      testResultsFiles: '**/TEST-*.xml'
+#      sonarQubeRunAnalysis: false
+#      spotBugsAnalysis: false
+#      options: '-x test'
+#      tasks: 'build'
+#
+#  - task: SonarCloudPrepare@1
+#    displayName: 'Prepare analysis on SonarCloud'
+#    inputs:
+#      SonarCloud: 'SonarCloudGrowingMap'
+#      organization: talentpool-1
+#      scannerMode: CLI
+#      configMode: manual
+#      cliProjectKey: pragma-groupmap-back-assessments
+#      cliProjectName: pragma-groupmap-back-assessments
+#      cliSources: assessments/src
+#      extraProperties: |
+#        # Additional properties that will be passed to the scanner,
+#        # Put one key=value per line, example:
+#        # sonar.typescript.lcov.reportPaths=./coverage/pragma-growthmap-web/lcov.info
+#        sonar.java.binaries=.
+#        sonar.java.source=
+#        sonar.sources=.
+#
+#  - task: SonarCloudAnalyze@1
+#    displayName: 'Run Code Analysis'
+#
+#  # - task: whitesource.whiteSource-bolt-v2.bolt.wss.WhiteSource@21
+#  #   displayName: WhiteSource
+#
+#  - task: SonarCloudPublish@1
+#    inputs:
+#      pollingTimeoutSec: '300'
+#

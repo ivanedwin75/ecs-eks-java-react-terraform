@@ -1,0 +1,39 @@
+steps:
+
+  - task: DownloadPipelineArtifact@2
+    displayName: 'Download Build Artifacts'
+    inputs:
+      artifactName: '$(ArtifactName)'
+      patterns: '**/*.zip'
+      path: '$(Build.ArtifactStagingDirectory)'
+
+  - task: ExtractFiles@1
+    inputs:
+      archiveFilePatterns: '$(Build.ArtifactStagingDirectory)/*.zip'
+      cleanDestinationFolder: true
+      destinationFolder: './dist/'
+
+  - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
+    displayName: 'Upload S3'
+    inputs:
+      regionName: 'us-east-1'
+      awsCommand: s3
+      awsSubCommand: 'sync'
+      awsArguments: '$(Pipeline.Workspace)/s/dist/pragma-growthmap-web s3://$(S3_Bucket_Name) --delete'
+      failOnStandardError: false
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+
+  - task: AmazonWebServices.aws-vsts-tools.AWSCLI.AWSCLI@1
+    displayName: 'AWS CLI: Create cloudfront invalidation'
+    retryCountOnTaskFailure: 5
+    inputs:
+      regionName: 'us-east-1'
+      awsCommand: cloudfront
+      awsSubCommand: 'create-invalidation'
+      awsArguments: '--distribution-id $(CloudFront_Id) --paths "/*"'
+      failOnStandardError: false
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)

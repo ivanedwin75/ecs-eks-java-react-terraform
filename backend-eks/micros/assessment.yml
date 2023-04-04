@@ -1,0 +1,143 @@
+steps:
+  - bash: |
+      cat >> ~/mapa-crecimiento-$(ENV).yml << EOL
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: map-assessments-api
+        namespace: $(NAMESPACE)
+      spec:
+        selector:
+          matchLabels:
+            app: map-assessments-api
+        replicas: 1
+        revisionHistoryLimit: 1
+        template:
+          metadata:
+            annotations:
+              sidecar.istio.io/inject: "false"
+            labels:
+              app: map-assessments-api
+          spec:
+            containers:
+              - name: map-assessments-api
+                image: $(FULL_ECR_REPO)/$(ECR_REPO):assessments-$(setAppVersion.hashOrTag)
+                imagePullPolicy: Always
+                env:
+                  - name: PROFILE
+                    value: $(PROFILE)
+                  - name: URL_DATABASE
+                    value: $(URL_DATABASE)
+                  - name: USER_DATABASE
+                    value: $(USER_DATABASE)
+                  - name: PASSWORD_DATABASE
+                    value: $(PASSWORD_DATABASE)
+                  - name: DRIVER_DATABASE
+                    value: $(DRIVER_DATABASE)
+                  - name: H2_ENABLE
+                    value: "$(H2_ENABLE)"
+                  - name: H2_PATH
+                    value: $(H2_PATH)
+                  - name: H2_WEBALL
+                    value: "$(H2_WEBALL)"
+                  - name: JPA_SHOW
+                    value: "$(JPA_SHOW)"
+                  - name: JPA_DATABASE
+                    value: $(JPA_DATABASE)
+                  - name: JPA_SSL
+                    value: "$(JPA_SSL)"
+                  - name: JPA_SHOWSQL
+                    value: "$(JPA_SHOWSQL)"
+                  - name: HIBERNATE_DIALECT
+                    value: $(HIBERNATE_DIALECT)
+                  - name: HIBERNATE_DDL
+                    value: $(HIBERNATE_DDL)
+                  - name: MESSAGE_BASENAME
+                    value: $(MESSAGE_BASENAME)
+                  - name: MESSAGE_ENCODING
+                    value: $(MESSAGE_ENCODING)
+                  - name: KEYSECRET_SECURITY
+                    value: $(KEYSECRET_SECURITY)
+                  - name: EXPIRA_DAYS_SECURITY
+                    value: "$(EXPIRA_DAYS_SECURITY)"
+                  - name: PREFIX_SECURITY
+                    value: $(PREFIX_SECURITY)
+                  - name: URL_MODULE_MICROGROWTHMODEL
+                    value: $(URL_MODULE_MICROGROWTHMODEL)
+                  - name: URL_MODULE_SENIORITY
+                    value: $(URL_MODULE_SENIORITY)
+                  - name: URL_MODULE_PERFIL
+                    value: $(URL_MODULE_PERFIL)
+                  - name: URL_SHEET_CHAPTER
+                    value: $(URL_SHEET_CHAPTER)
+                  - name: URL_DUPLICATE_DOCUMENT
+                    value: $(URL_DUPLICATE_DOCUMENT)
+                  - name: URL_MODULE_LANGUAGE
+                    value: $(URL_MODULE_LANGUAGE)
+                  - name: URL_INFO_FOLDERS
+                    value: $(URL_INFO_FOLDERS)
+                  - name: URL_CHAPTERS_MODULE_APPSCRIPT
+                    value: $(URL_CHAPTERS_MODULE_APPSCRIPT)
+                  - name: URL_MODULE_APPSCRIPT
+                    value: $(URL_MODULE_APPSCRIPT)
+                  - name: URL_MODULE_APPSCRIPT_GSHEET_TO_PDF
+                    value: $(URL_MODULE_APPSCRIPT_GSHEET_TO_PDF)
+                  - name: URL_USER_CHAPTER_APPSCRIPT
+                    value: $(URL_USER_CHAPTER_APPSCRIPT)
+                  - name: URL_MODULE_PERFIL_USUARIOS
+                    value: $(URL_MODULE_PERFIL_USUARIOS)
+                  - name: URL_LAMBDA_TOKEN
+                    value: $(URL_LAMBDA_TOKEN)
+                  - name: URL_SALARY_SHEET_CHAPTER
+                    value: $(URL_SALARY_SHEET_CHAPTER)
+                  - name: VARIABLES_PLANTILLA_MEDALLA_SENIORITY
+                    value: $(VARIABLES_PLANTILLA_MEDALLA_SENIORITY)
+                  - name: VARIABLES_PLANTILLA_TEXT_SENIORITY
+                    value: $(VARIABLES_PLANTILLA_TEXT_SENIORITY)
+                  - name: VARIABLES_PLANTILLA_SENIORITY_LEVEL
+                    value: $(VARIABLES_PLANTILLA_SENIORITY_LEVEL)
+                  - name: URL_MODULE_USER_EMAIL_IMAGEN
+                    value: $(URL_MODULE_USER_EMAIL_IMAGEN)
+                  - name: URL_MODULE_API_BITACORA
+                    value: $(URL_MODULE_API_BITACORA)
+                  - name: URL_UPDATE_USER_APPSCRIPT
+                    value: $(URL_UPDATE_USER_APPSCRIPT)
+                  - name: URL_MODULO_SENIORITY_TIMES
+                    value: $(URL_MODULO_SENIORITY_TIMES)
+                  - name: VARIABLES_DEPLOY_ENVIROMENT
+                    value: $(VARIABLES_DEPLOY_ENVIROMENT)
+                  - name: VARIABLES_GENERIC_USER_EMAIL
+                    value: $(VARIABLES_GENERIC_USER_EMAIL)
+                  - name: VARIABLE_AREAS
+                    value: $(VARIABLE_AREAS)
+                resources:
+                  limits:
+                    cpu: 200m
+                    memory: 500Mi
+                  requests:
+                    cpu: 100m
+                    memory: 400Mi
+                ports:
+                  - name: http
+                    containerPort: 9010
+                    protocol: TCP
+            dnsPolicy: ClusterFirst
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        labels:
+          app: map-assessments-svc
+        name: map-assessments-svc
+        namespace: $(NAMESPACE)
+      spec:
+        type: ClusterIP
+        ports:
+          - name: http
+            port: 9010
+            protocol: TCP
+            targetPort: 9010
+        selector:
+          app: map-assessments-api
+      EOL
+    displayName: 'kubectl: create ~/mapa-crecimiento-$(ENV).yml'
